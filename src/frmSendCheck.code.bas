@@ -2,9 +2,8 @@
 ' frmSendCheck - 送信前チェック UserForm
 '
 ' 入れ方:
-'   空の UserForm を作り、名前を frmSendCheck にする。
-'   フォーム上には部品を置かない。このコードを貼る。
-'   起動時に VBA が画面を自動生成する。
+'   README の手順で、Outlook の VBA エディタに入れる。
+'   フォーム上には部品を置かない。起動時に VBA が画面を自動生成する。
 '
 ' 基本サイズ:
 '   幅 800pt
@@ -893,9 +892,9 @@ End Sub
 
 Private Sub RegisterCardClick(ByVal ctl As Object)
 
-    Dim handler As CCardClick
+    Dim handler As ClsCardClick
 
-    Set handler = New CCardClick
+    Set handler = New ClsCardClick
     Set handler.ParentForm = Me
 
     If TypeName(ctl) = "Frame" Then
@@ -1311,7 +1310,14 @@ Private Sub ReflowCards(ByVal list As MSForms.Frame)
 
     For i = 1 To n - 1
         For j = i + 1 To n
-            If CLng(Mid(cards(j).Name, 6)) < CLng(Mid(cards(i).Name, 6)) Then
+            ' 未チェックを上へ。同じ状態の中では元の番号順
+            If PersonIsChecked(cards(j)) <> PersonIsChecked(cards(i)) Then
+                If Not PersonIsChecked(cards(j)) Then
+                    Set tmp = cards(i)
+                    Set cards(i) = cards(j)
+                    Set cards(j) = tmp
+                End If
+            ElseIf CLng(Mid(cards(j).Name, 6)) < CLng(Mid(cards(i).Name, 6)) Then
                 Set tmp = cards(i)
                 Set cards(i) = cards(j)
                 Set cards(j) = tmp
@@ -1360,6 +1366,21 @@ Private Sub ReflowCards(ByVal list As MSForms.Frame)
     If v > 0 And topPos > CARD_PAD Then topPos = topPos - CARD_GAP
     list.ScrollHeight = topPos + CARD_PAD
     SyncScrollThumb list
+
+End Sub
+
+
+Private Sub ReflowPeopleLists()
+
+    Dim names As Variant
+    Dim i As Long
+    Dim fra As MSForms.Frame
+
+    names = Array("fraExternal", "fraOutside", "fraInternal")
+    For i = LBound(names) To UBound(names)
+        Set fra = Me.Controls(CStr(names(i)))
+        ReflowCards fra.Controls(fra.Name & "_list")
+    Next i
 
 End Sub
 
@@ -1677,6 +1698,77 @@ Private Sub AddAttachItem( _
 End Sub
 
 
+Private Function TopItemPending(ByVal index As Long) As Boolean
+
+    TopItemPending = False
+    If mAttachItems(index).Kind = "note" Then Exit Function
+    TopItemPending = Not mAttachItems(index).Checked
+
+End Function
+
+
+Private Sub AppendVisibleBranch( _
+    ByVal index As Long, _
+    ByRef visibleIds() As String, _
+    ByRef n As Long)
+
+    Dim i As Long
+
+    If AttachItemVisible(index) Then
+        n = n + 1
+        visibleIds(n) = mAttachItems(index).Id
+    End If
+
+    For i = 1 To mAttachCount
+        If mAttachItems(i).ParentId = mAttachItems(index).Id Then
+            AppendVisibleBranch i, visibleIds, n
+        End If
+    Next i
+
+End Sub
+
+
+Private Sub CollectVisibleAttachments( _
+    ByRef visibleIds() As String, _
+    ByRef n As Long)
+
+    Dim tops() As Long
+    Dim topN As Long
+    Dim i As Long
+    Dim j As Long
+    Dim tmp As Long
+
+    n = 0
+    If mAttachCount <= 0 Then Exit Sub
+
+    ReDim tops(1 To mAttachCount)
+    topN = 0
+    For i = 1 To mAttachCount
+        If Len(mAttachItems(i).ParentId) = 0 Then
+            topN = topN + 1
+            tops(topN) = i
+        End If
+    Next i
+
+    ' 1階層目の未チェックを上へ。中身は親の直後に、元の順で続ける
+    For i = 1 To topN - 1
+        For j = i + 1 To topN
+            If TopItemPending(tops(j)) And Not TopItemPending(tops(i)) Then
+                tmp = tops(i)
+                tops(i) = tops(j)
+                tops(j) = tmp
+            End If
+        Next j
+    Next i
+
+    ReDim visibleIds(1 To mAttachCount)
+    For i = 1 To topN
+        AppendVisibleBranch tops(i), visibleIds, n
+    Next i
+
+End Sub
+
+
 Private Sub RenderAttachmentList()
 
     Dim fra As MSForms.Frame
@@ -1699,15 +1791,7 @@ Private Sub RenderAttachmentList()
     Set mAttachHandlers = New Collection
     ClearFrameControls list
 
-    n = 0
-    ReDim visibleIds(1 To mAttachCount)
-
-    For i = 1 To mAttachCount
-        If AttachItemVisible(i) Then
-            n = n + 1
-            visibleIds(n) = mAttachItems(i).Id
-        End If
-    Next i
+    CollectVisibleAttachments visibleIds, n
 
     contentH = n * ATTACH_ROW + S(4)
     topCount = 0
@@ -2327,9 +2411,9 @@ End Function
 
 Private Sub RegisterAttachClick(ByVal ctl As Object)
 
-    Dim handler As CCardClick
+    Dim handler As ClsCardClick
 
-    Set handler = New CCardClick
+    Set handler = New ClsCardClick
     Set handler.ParentForm = Me
 
     If TypeName(ctl) = "Frame" Then
@@ -2531,7 +2615,7 @@ Private Sub BindScrollDrag( _
     ByVal track As MSForms.Label, _
     ByVal thumb As MSForms.Label)
 
-    Dim handler As CScrollDrag
+    Dim handler As ClsScrollDrag
     Dim existing As Object
 
     On Error Resume Next
@@ -2539,7 +2623,7 @@ Private Sub BindScrollDrag( _
     On Error GoTo 0
     If Not existing Is Nothing Then Exit Sub
 
-    Set handler = New CScrollDrag
+    Set handler = New ClsScrollDrag
     Set handler.Track = track
     Set handler.Thumb = thumb
     Set handler.ParentForm = Me
@@ -2788,10 +2872,11 @@ Private Sub CreateFooter()
 
     x = x + S(124) + S(6)
 
+    scaleCaption = ChrW(&H8868) & ChrW(&H793A) & ChrW(&H500D) & ChrW(&H7387) & "x"
     If mScale > 1 Then
-        scaleCaption = ChrW(&H6A19) & ChrW(&H6E96)
+        scaleCaption = scaleCaption & "1.0"
     Else
-        scaleCaption = "1.5" & ChrW(&H500D)
+        scaleCaption = scaleCaption & "1.5"
     End If
 
     CreateFlatButton _
@@ -2800,7 +2885,7 @@ Private Sub CreateFooter()
         "", _
         x, _
         topPos, _
-        S(64), _
+        S(124), _
         S(28), _
         RGB(255, 255, 255), _
         RGB(45, 45, 48), _
@@ -2901,6 +2986,8 @@ Private Sub CheckAll()
     CheckPeopleIn "fraOutside"
     CheckPeopleIn "fraInternal"
     CheckAllAttachments
+    ReflowPeopleLists
+    RenderAttachmentList
     UpdateSendButton
 
 End Sub
@@ -2909,6 +2996,7 @@ End Sub
 Private Sub CheckInternal()
 
     CheckPeopleIn "fraInternal"
+    ReflowPeopleLists
     UpdateSendButton
 
 End Sub
@@ -3091,9 +3179,9 @@ Private Sub RegisterFlatClick( _
     ByVal downBack As Long, _
     ByVal actionName As String)
 
-    Dim handler As CButtonHandler
+    Dim handler As ClsButtonHandler
 
-    Set handler = New CButtonHandler
+    Set handler = New ClsButtonHandler
 
     Set handler.ParentForm = Me
     Set handler.Host = host
@@ -3219,6 +3307,7 @@ Public Sub TogglePersonCheck(ByVal card As MSForms.Frame)
     End If
 
     PlacePersonCheck card
+    ReflowCards card.Parent
     UpdateSendButton
 
 End Sub
@@ -3281,12 +3370,7 @@ Public Sub ToggleAttachCheck(ByVal itemId As String)
     If mAttachItems(index).Kind = "note" Then Exit Sub
 
     mAttachItems(index).Checked = Not mAttachItems(index).Checked
-
-    PaintAttachCheck _
-        Me.Controls("fraAttachments").Controls("fraAttachments_list"), _
-        itemId, _
-        mAttachItems(index).Checked
-
+    RenderAttachmentList
     UpdateSendButton
 
 End Sub
@@ -3394,19 +3478,24 @@ Private Sub ClearAllChecks()
         End If
     Next i
 
+    ReflowPeopleLists
+    RenderAttachmentList
     UpdateSendButton
 
 End Sub
 
 
-Private Function RemainCaption(ByVal count As Long) As String
+Private Function RemainCaption(ByVal peopleLeft As Long, ByVal filesLeft As Long) As String
 
     Dim head As String
     Dim tail As String
 
-    tail = " " & ChrW(&H672A) & ChrW(&H2713) & ChrW(&H4EF6) & ChrW(&H6570) & ChrW(&HFF1A) & CStr(count)
+    tail = " " & ChrW(&H9001) & ChrW(&H4FE1) & " " & ChrW(&H672A) & ChrW(&H2713) & _
+        ChrW(&HFF1A) & CStr(peopleLeft) & " " & _
+        ChrW(&H6DFB) & ChrW(&H4ED8) & " " & ChrW(&H672A) & ChrW(&H2713) & _
+        ChrW(&HFF1A) & CStr(filesLeft)
 
-    If count = 0 Then
+    If peopleLeft = 0 And filesLeft = 0 Then
         head = ChrW(&H9001) & ChrW(&H4FE1) & ChrW(&H3067) & ChrW(&H304D) & ChrW(&H307E) & ChrW(&H3059) & ChrW(&H3002)
     Else
         head = ChrW(&H5B9B) & ChrW(&H5148) & ChrW(&H3001) & ChrW(&H6DFB) & ChrW(&H4ED8) & _
@@ -3420,7 +3509,7 @@ Private Function RemainCaption(ByVal count As Long) As String
 End Function
 
 
-Private Function UncheckedRequiredCount() As Long
+Private Function UncheckedPeopleCount() As Long
 
     Dim names As Variant
     Dim i As Long
@@ -3443,6 +3532,16 @@ Private Function UncheckedRequiredCount() As Long
         Next ctl
     Next i
 
+    UncheckedPeopleCount = n
+
+End Function
+
+
+Private Function UncheckedFileCount() As Long
+
+    Dim i As Long
+    Dim n As Long
+
     For i = 1 To mAttachCount
         If mAttachItems(i).Depth = 0 Then
             If mAttachItems(i).Kind <> "note" Then
@@ -3451,7 +3550,7 @@ Private Function UncheckedRequiredCount() As Long
         End If
     Next i
 
-    UncheckedRequiredCount = n
+    UncheckedFileCount = n
 
 End Function
 
@@ -3461,16 +3560,18 @@ Private Sub UpdateRemainLabel()
     Dim lbl As MSForms.Label
     Dim blank As MSForms.Label
     Dim blankRight As MSForms.Label
-    Dim n As Long
+    Dim peopleLeft As Long
+    Dim filesLeft As Long
 
     On Error Resume Next
     Set lbl = Me.Controls("lblCheckRemain")
     If lbl Is Nothing Then Exit Sub
     On Error GoTo 0
 
-    n = UncheckedRequiredCount()
-    lbl.Caption = RemainCaption(n)
-    If n = 0 Then
+    peopleLeft = UncheckedPeopleCount()
+    filesLeft = UncheckedFileCount()
+    lbl.Caption = RemainCaption(peopleLeft, filesLeft)
+    If peopleLeft = 0 And filesLeft = 0 Then
         lbl.ForeColor = RGB(46, 164, 90)
     Else
         lbl.ForeColor = RGB(176, 64, 60)
@@ -3681,11 +3782,12 @@ End Function
 
 Private Function ScaleTip() As String
 
-    ScaleTip = ChrW(&H753B) & ChrW(&H9762) & ChrW(&H5168) & ChrW(&H4F53) & ChrW(&H3092) & _
-        "1.5" & ChrW(&H500D) & ChrW(&H306B) & ChrW(&H3057) & ChrW(&H307E) & ChrW(&H3059) & _
-        ChrW(&H3002) & ChrW(&H53CE) & ChrW(&H307E) & ChrW(&H3089) & ChrW(&H306A) & ChrW(&H3044) & _
-        ChrW(&H74B0) & ChrW(&H5883) & ChrW(&H3067) & ChrW(&H306F) & ChrW(&H5207) & ChrW(&H308A) & _
-        ChrW(&H66FF) & ChrW(&H3048) & ChrW(&H307E) & ChrW(&H305B) & ChrW(&H3093)
+    ScaleTip = ChrW(&H8868) & ChrW(&H793A) & ChrW(&H500D) & ChrW(&H7387) & _
+        ChrW(&H3092) & ChrW(&H5207) & ChrW(&H308A) & ChrW(&H66FF) & ChrW(&H3048) & _
+        ChrW(&H307E) & ChrW(&H3059) & ChrW(&H3002) & ChrW(&H53CE) & ChrW(&H307E) & _
+        ChrW(&H3089) & ChrW(&H306A) & ChrW(&H3044) & ChrW(&H500D) & ChrW(&H7387) & _
+        ChrW(&H306B) & ChrW(&H306F) & ChrW(&H5207) & ChrW(&H308A) & ChrW(&H66FF) & _
+        ChrW(&H3048) & ChrW(&H307E) & ChrW(&H305B) & ChrW(&H3093)
 
 End Function
 
@@ -3739,16 +3841,12 @@ Private Sub RestoreChecks()
     If Not KeptFiles Is Nothing Then
         For Each id In KeptFiles
             index = FindAttachItem(CStr(id))
-            If index > 0 Then
-                mAttachItems(index).Checked = True
-                PaintAttachCheck _
-                    Me.Controls("fraAttachments").Controls("fraAttachments_list"), _
-                    CStr(id), _
-                    True
-            End If
+            If index > 0 Then mAttachItems(index).Checked = True
         Next id
     End If
 
+    ReflowPeopleLists
+    RenderAttachmentList
     Set KeptPeople = Nothing
     Set KeptFiles = Nothing
     UpdateSendButton
@@ -3780,7 +3878,7 @@ Private Sub ApplyDisplayScale()
 
     RememberChecks
     SendCheckScale = nextScale
-    Application.OnTime Now + TimeSerial(0, 0, 1), "ReopenSendCheckScaled"
+    ScheduleReopenSendCheck
     Unload Me
 
 End Sub
