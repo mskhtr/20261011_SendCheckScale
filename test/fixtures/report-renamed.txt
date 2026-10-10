@@ -1,0 +1,18 @@
+﻿file: c:\Users\masaki\Documents\python-projects\_tool\20261008_SendCheck\test\fixtures\stored._IP
+isZip: True
+outerExtension: ._ip
+entryCount: 12
+extensions: (none), .exe, .pdf, .txt, .xlsm
+entries:
+a.txt	.txt
+b.PDF	.pdf
+folder/sub.txt	.txt
+hidden.bin	.bin	container
+hidden.bin/secret.xlsm	.xlsm
+inner.zip	.zip	container
+inner.zip/secret.xlsm	.xlsm
+mask.zi_	.zi_	container
+mask.zi_/secret.xlsm	.xlsm
+readme	(none)
+run.exe	.exe
+日本語メモ.txt	.txt

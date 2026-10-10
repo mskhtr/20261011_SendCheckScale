@@ -1,0 +1,45 @@
+﻿PASS CRC32
+PASS UTF-8の往復
+PASS Shift_JISの往復
+PASS 通常のテキスト
+PASS 拡張子だけzip
+PASS PKで始まるテキスト
+PASS 存在しないファイル
+PASS 格納ZIPを.NETが読める
+PASS 空のZIP
+PASS 格納ZIPの件数
+PASS 格納ZIPの拡張子
+PASS 格納ZIPの入れ子と日本語名
+PASS AttachmentExtensions
+PASS 拡張子zi_
+PASS 拡張子_IP
+PASS 改名しても中身は同じ
+PASS 日本語ファイル名Shift_JIS
+PASS 暗号化フラグ
+PASS 器のZIPは拡張子から除外
+PASS 器の中のPDF以外は残る
+PASS 実圧縮ZIPの拡張子
+PASS 実圧縮ZIPの入れ子と日本語名
+PASS 実圧縮ZIPの改名
+
+23 passed, 0 failed
+
+---- sample: stored._IP ----
+file: c:\Users\masaki\Documents\python-projects\_tool\20261008_SendCheck\test\fixtures\stored._IP
+isZip: True
+outerExtension: ._ip
+entryCount: 12
+extensions: (none), .exe, .pdf, .txt, .xlsm
+entries:
+a.txt	.txt
+b.PDF	.pdf
+folder/sub.txt	.txt
+hidden.bin	.bin	container
+hidden.bin/secret.xlsm	.xlsm
+inner.zip	.zip	container
+inner.zip/secret.xlsm	.xlsm
+mask.zi_	.zi_	container
+mask.zi_/secret.xlsm	.xlsm
+readme	(none)
+run.exe	.exe
+日本語メモ.txt	.txt
